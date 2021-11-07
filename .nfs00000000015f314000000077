@@ -1,0 +1,75 @@
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <iostream>
+#include <cstring>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/select.h>
+#include <string>
+#include<sstream>
+#include <vector>
+#include <cstdlib>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+using namespace std;
+
+#define MAX_CLIENT_SIZE 30
+#define BUFSIZE 100
+
+typedef struct{
+	int fd[2];
+	int index = -1;
+}pipe_data;
+
+typedef struct{
+    int fd;
+    int id;
+    string name;
+    char ip[INET_ADDRSTRLEN];
+    int port;
+    vector<pipe_data> numpipe;
+
+}client_info;
+
+int record_id[MAX_CLIENT_SIZE];
+
+class NpShell{
+    private:
+        vector<pipe_data> record_n;
+    public:
+        static void handle_child(int);
+        vector<string> spilt_input(const string&);
+        int printenv(string&);
+        void redirection(string&);
+        vector<string> parse(string&);
+        int operation(vector<string>);
+        int exec();
+      //  int GetUnusedID();
+
+};
+
+void NpShell::who(){
+
+}
+void welcome(int sockfd){
+    string msg = "";
+    msg += "****************************************\n";
+    msg += "** Welcome to the information server. **\n";
+    msg += "****************************************\n";
+    if(write(sockfd,msg.c_str(),msg.length()) == -1)
+        perror("send error");
+}
+int echo(int fd)
+{
+    char	buf[BUFSIZE];
+    int	cc;
+    cc = read(fd, buf, sizeof buf);
+    if (cc < 0)
+        errexit("echo read: %s\n", strerror(errno));
+    if (cc && write(fd, buf, cc) < 0)
+        errexit("echo write: %s\n", strerror(errno));
+    return cc;
+}

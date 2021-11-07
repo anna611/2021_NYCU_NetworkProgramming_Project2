@@ -60,7 +60,7 @@ int main(int argc, char* argv[])
     int port = atoi(argv[1]);
     // create tcp
     sockfd = CreateServTCP(port);
-    cout << "Sockfd: " << sockfd << endl;
+    //cout << "Sockfd: " << sockfd << endl;
     setenv("PATH", "bin:.", 1);
     while (true)
     {
@@ -71,7 +71,7 @@ int main(int argc, char* argv[])
             cerr << "Error: accept failed" << endl;
             continue;
         }
-        cout << "New sockfd: " << newsockfd << endl;
+        //cout << "New sockfd: " << newsockfd << endl;
         childpid = fork();
         while (childpid < 0)
             childpid = fork();
