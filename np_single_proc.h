@@ -35,16 +35,26 @@ typedef struct{
     char ip[INET_ADDRSTRLEN];
     int port;
 	int finish;
-    //vector<pipe_data>;
+	string env;
+	string env_v;
+	vector<pipe_data> numpipe;
 }client_info;
+
+typedef struct{
+	int fd[2];
+	int source_id;
+	int dest_id;
+	bool is_used;
+}userpipe;
+
 fd_set rfds;
 fd_set afds;
 int msock;
 int record_id[MAX_CLIENT_SIZE];
+vector<userpipe> userpipe_record;
 vector<client_info> client_record;
 class NpShell{
     private:
-        vector<pipe_data> record_n;
 		int sockfd;
     public:
         static void handle_child(int);
@@ -52,7 +62,7 @@ class NpShell{
         int printenv(string&);
         void redirection(string&);
         vector<string> parse(string&);
-        int operation(vector<string>);
+        int operation(vector<string>,client_info);
         int exec(string,client_info);
         void who(client_info);
 		void tell(client_info,vector<string>);
@@ -86,6 +96,12 @@ void logout(client_info &cli){
 		if(fd != msock && FD_ISSET(fd,&afds)){
 			if(write(fd,msg.c_str(),msg.length()) == -1)
 				perror("send error");
+		}
+	}
+	for(int i = 0;i < userpipe_record.size();++i){
+		if(userpipe_record[i].source_id == cli.id || userpipe_record[i].dest_id == cli.id){
+			userpipe_record.erase(userpipe_record.begin()+i);
+			i--;
 		}
 	}
 }
@@ -157,13 +173,16 @@ void NpShell::name(client_info cli,vector<string> s){
 	}
 	string msg = "";
 	int nfds = getdtablesize();
+	//check name exist or not
 	for(int i = 0;i < client_record.size();++i){
 		if(client_record[i].name == name && client_record[i].finish == 0){
 			index = -1;
 			break;
 		}
 		else{
-			index = i;
+			if(client_record[i].id == cli.id && client_record[i].finish == 0){
+				index = i;
+			}
 		}
 	}
 	if(index != -1){
@@ -232,18 +251,31 @@ vector<string> NpShell::parse(string& s){	//split commands with pipe
 	return res;
 
 }
-int NpShell::operation(vector<string> s){
+int NpShell::operation(vector<string> s,client_info cli){
 	char *commands[256];
 	int redirectout = 0;
 	int number_pipe = 0;
 	int error_pipe = 0;
+	int user_pipe = 0;
+	int user_pipe_recv = 0;
 	char buf[10240];
 	vector<int> num;
 	size_t pos;
 	string deli = "|";
 	string deli2 = "!";
+	string deli3 = ">";
+	string deli4 = "<";
 	vector<pipe_data> record;
 	pipe_data p;
+	userpipe u;
+	string msg = "";
+	int nfds;
+	int dest = -1;
+	int source = -1;
+	bool exist = false;
+	bool exist_r = false;
+	string cmd = "";
+	bool userpipe_error = false;
 	for(int i = 0; i < s.size();++i){
 		bool x = false;
 		bool y = false;
@@ -258,16 +290,129 @@ int NpShell::operation(vector<string> s){
 			if(pipe(p.fd) < 0)
 				cout << "pipe create error"<<endl;
 			p.index = stoi(s[i].substr(pos+1));
-			record_n.push_back(p);	
+			cli.numpipe.push_back(p);
 		}
 		vector<string> tmp = spilt_input(s[i]);
-		if(i == 0){
-			for(int j = 0;j<record_n.size();++j){
-					if(record_n[j].index == 0){
-						num.push_back(j);
-						record_n[j].index = -1;
+		//check whether need userpipe
+		for(int j = 0;j < tmp.size();++j){
+			cmd += tmp[j];
+			if(j!= tmp.size()-1)
+				cmd += " ";
+			if(((pos = tmp[j].find(deli3)) != string::npos) && tmp[j].length()>1){
+				dest = stoi(tmp[j].substr(pos+1));
+				tmp.erase(tmp.begin()+j);
+				j--;
+			}
+			if(((pos = tmp[j].find(deli4)) != string::npos) && tmp[j].length()>1){
+				source = stoi(tmp[j].substr(pos+1));
+				tmp.erase(tmp.begin()+j);
+				j--;
+			}
+		}
+		if(i != s.size()-1){
+			cmd += " | ";
+		}
+			//source id exist
+			if(source != -1){
+				if(record_id[source-1] == 0){
+					userpipe_error = true;
+					msg = "*** Error: user #"+to_string(source)+" does not exist yet. ***\n";
+					if(write(cli.fd,msg.c_str(),msg.length()) == -1)
+						perror("send error");
+				}
+				else{
+					for(int j = 0;j < userpipe_record.size();++j){
+						if(userpipe_record[j].source_id == source && userpipe_record[j].dest_id == cli.id){
+							if(userpipe_record[j].is_used == true){
+								exist_r = true;
+								userpipe_record[j].is_used = false;
+							}
+						}
+					}
+					//check whether exist
+					if(exist_r){
+						string source_name = "";
+						user_pipe_recv = 1;
+						for(int j = 0; j < client_record.size();++j){
+							if(client_record[j].id == source && client_record[j].finish == 0)
+								source_name = client_record[j].name;
+						}
+						if(i == s.size()-1){
+							msg = "*** "+cli.name+" (#"+to_string(cli.id)+") just received from "+source_name+" (#"+to_string(source)+") by '"+cmd+"' ***\n";
+							nfds = getdtablesize();
+							//broadcast
+							for(int fd = 0;fd < nfds; ++fd){
+								if(fd != msock && FD_ISSET(fd,&afds)){
+									if(write(fd,msg.c_str(),msg.length()) == -1)
+										perror("send error");
+								}
+							}
+						}
+					}
+					else{
+						userpipe_error = true;
+						msg += "*** Error: the pipe #"+to_string(source)+"->#"+to_string(cli.id)+" does not exist yet. ***\n";
+						if(write(cli.fd,msg.c_str(),msg.length()) == -1)
+							perror("send error");
 					}
 				}
+			}
+			//dest id exist 
+			if(dest != -1){
+				if(record_id[dest-1] == 0){
+					userpipe_error = true;
+					msg = "*** Error: user #"+to_string(dest)+" does not exist yet. ***\n";
+					if(write(cli.fd,msg.c_str(),msg.length()) == -1)
+						perror("send error");
+				}
+				else{
+					for(int j = 0;j < userpipe_record.size();++j){
+						if(userpipe_record[j].source_id == cli.id && userpipe_record[j].dest_id == dest){
+							if(userpipe_record[j].is_used == true)
+								exist = true;
+						}
+					}
+					//check whether exist
+					if(!exist){
+						if(pipe(u.fd) < 0)
+							cout << "pipe create error"<<endl;
+						u.source_id = cli.id;
+						u.dest_id = dest;
+						u.is_used = true;
+						userpipe_record.push_back(u);
+						string dest_name = "";
+						user_pipe = 1;
+						for(int j = 0; j < client_record.size();++j){
+							if(client_record[j].id == dest && client_record[j].finish == 0)
+								dest_name = client_record[j].name;
+						}
+						if(i == s.size()-1){
+							msg = "*** "+cli.name+" (#"+to_string(cli.id)+") just piped '"+cmd+"' to "+dest_name+" (#"+to_string(dest)+") ***\n";
+							nfds = getdtablesize();
+							//broadcast
+							for(int fd = 0;fd < nfds; ++fd){
+								if(fd != msock && FD_ISSET(fd,&afds)){
+									if(write(fd,msg.c_str(),msg.length()) == -1)
+										perror("send error");
+								}
+							}
+						}
+					}
+					else{
+						userpipe_error = true;
+						msg += "*** Error: the pipe #"+to_string(cli.id)+"->#"+to_string(dest)+" already exists. ***\n";
+						if(write(cli.fd,msg.c_str(),msg.length()) == -1)
+							perror("send error");
+					}
+				}
+			}
+		if(i == 0){
+			for(int j = 0;j<cli.numpipe.size();++j){
+				if(cli.numpipe[j].index == 0){
+					num.push_back(j);
+					cli.numpipe[j].index = -1;
+				}
+			}
 		}
 		signal(SIGCHLD,handle_child);
 		pid_t c_pid = fork();
@@ -283,22 +428,35 @@ int NpShell::operation(vector<string> s){
 			if(i == 0){
 				if(!num.empty()&& num.size() >1){
 					for(int j = num.size()-1;j >= 0; --j){
-						size_t nread = read(record_n[num[j]].fd[0],buf,10240);
-						size_t nwrite = write(record_n[num[j-1]].fd[1],buf,nread);
+						size_t nread = read(cli.numpipe[num[j]].fd[0],buf,10240);
+						size_t nwrite = write(cli.numpipe[num[j-1]].fd[1],buf,nread);
 					}
 				}
 				num.erase(num.begin(),num.end());
 			}
-			for(int j = 0;j<record_n.size();++j){
-					if(record_n[j].index == -1){
-						close(record_n[j].fd[0]);
-						close(record_n[j].fd[1]);
-						record_n.erase(record_n.begin()+j);
+			for(int j = 0;j<cli.numpipe.size();++j){
+					if(cli.numpipe[j].index == -1){
+						close(cli.numpipe[j].fd[0]);
+						close(cli.numpipe[j].fd[1]);
+						cli.numpipe.erase(cli.numpipe.begin()+j);
+						j--;
 					}
-				}
-			if(i == s.size()-1 && !(x || y))
-				waitpid(c_pid,nullptr,0);	
-
+			}
+			for(int j = 0;j < client_record.size();++j){
+                if(cli.fd == client_record[j].fd && client_record[j].finish == 0)
+                    client_record[j] = cli;
+            }
+			for(int j = 0;j<userpipe_record.size();++j){
+					if(userpipe_record[j].is_used == false){
+						close(userpipe_record[j].fd[0]);
+						close(userpipe_record[j].fd[1]);
+						userpipe_record.erase(userpipe_record.begin()+j);
+						j--;
+					}
+			}
+			if(i == s.size()-1 && !(x || y)){
+				waitpid(c_pid,nullptr,0);
+			}
 		} else if(c_pid == 0){	//child process
 			for(int j = 0;j < tmp.size();++j){	//process command 
 				if(tmp[j] == ">"){
@@ -334,24 +492,53 @@ int NpShell::operation(vector<string> s){
 
 			}
 			if(number_pipe == 1 ){	//number pipe
-				int count = record_n.size()-1;
-				dup2(record_n[count].fd[1],STDOUT_FILENO);
+				int count = cli.numpipe.size()-1;
+				dup2(cli.numpipe[count].fd[1],STDOUT_FILENO);
 				if(error_pipe)
-					dup2(record_n[count].fd[1],STDERR_FILENO);
-				close(record_n[count].fd[1]);
+					dup2(cli.numpipe[count].fd[1],STDERR_FILENO);
+				close(cli.numpipe[count].fd[1]);
+			}
+			if(user_pipe == 1){
+				int count = userpipe_record.size()-1;
+				dup2(userpipe_record[count].fd[1],STDOUT_FILENO);
+			}
+			if(user_pipe_recv == 1){
+				for(int j = 0;j < userpipe_record.size();++j){
+					if(userpipe_record[j].source_id == source && userpipe_record[j].dest_id == cli.id){
+						dup2(userpipe_record[j].fd[0],STDIN_FILENO);
+						userpipe_record[j].is_used = false;
+						close(userpipe_record[j].fd[0]);
+					}
+				}
 			}
 			if(i == 0){
 				if(!num.empty()){
-					dup2(record_n[num[0]].fd[0],STDIN_FILENO);
+					dup2(cli.numpipe[num[0]].fd[0],STDIN_FILENO);
 				}
 			}
-			for(int j = 0;j < record_n.size();++j){
-				close(record_n[j].fd[0]);
-				close(record_n[j].fd[1]);
+			for(int j = 0;j < cli.numpipe.size();++j){
+				close(cli.numpipe[j].fd[0]);
+				close(cli.numpipe[j].fd[1]);
 			}
+			for(int j = 0;j < client_record.size();++j){
+                if(cli.fd == client_record[j].fd && client_record[j].finish == 0)
+                    client_record[j] = cli;
+            }
 			for(int j = 0;j < record.size(); ++j){
 				close(record[j].fd[0]);
 				close(record[j].fd[1]);
+			}
+			for(int j = 0;j < userpipe_record.size(); ++j){
+				close(userpipe_record[j].fd[0]);
+				close(userpipe_record[j].fd[1]);
+			}
+			if(userpipe_error){
+				int null_fd0 = open("/dev/null", O_RDONLY);
+				int null_fd1 = open("/dev/null", O_WRONLY);
+				dup2(null_fd0,STDIN_FILENO);
+				dup2(null_fd1,STDOUT_FILENO);
+				close(null_fd0);
+				close(null_fd1);
 			}
 			execvp(commands[0],commands);
 			cerr << "Unknown command: [" << commands[0] << "]." << endl;
@@ -361,7 +548,7 @@ int NpShell::operation(vector<string> s){
 	return 0;	
 }
 int NpShell::exec(string str,client_info cli){
-	setenv("PATH","bin:.",1);
+	setenv(cli.env.c_str(),cli.env_v.c_str(),1);
 	sockfd = cli.fd;
 	dup2(sockfd,STDOUT_FILENO);
     dup2(sockfd,STDERR_FILENO);
@@ -370,57 +557,85 @@ int NpShell::exec(string str,client_info cli){
 		if(!results.empty()){
 			if(results[0] == "printenv"){
 				printenv(results[1]);
-				for(int i = 0;i < record_n.size();++i){
-					if(record_n[i].index > 0 )
-						record_n[i].index--;
-				}
+				for(int i = 0;i < client_record.size();++i){
+                    if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
+                        for(int j = 0;j < client_record[i].numpipe.size();++j){
+							if(client_record[i].numpipe[j].index > 0 )
+								client_record[i].numpipe[j].index--;
+						}
+					}
+            	}
 			}
 			else if(results[0] == "setenv"){
 				setenv(results[1].c_str(),results[2].c_str(),1);	
-				for(int i = 0;i < record_n.size();++i){
-					if(record_n[i].index > 0 )
-						record_n[i].index--;
-				}
-
+				for(int i = 0;i < client_record.size();++i){
+                    if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
+                        for(int j = 0;j < client_record[i].numpipe.size();++j){
+							if(client_record[i].numpipe[j].index > 0 )
+								client_record[i].numpipe[j].index--;
+						}
+						client_record[i].env = results[1];
+						client_record[i].env_v = results[2];
+					}
+            	}
 			}
 			else if(results[0] == "exit" || results[0] == "EOF" ){
                 return -1;
 			}
 			else if(results[0] == "who"){
 				who(cli);	
-				for(int i = 0;i < record_n.size();++i){
-					if(record_n[i].index > 0 )
-						record_n[i].index--;
-				}
+				for(int i = 0;i < client_record.size();++i){
+                    if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
+                        for(int j = 0;j < client_record[i].numpipe.size();++j){
+							if(client_record[i].numpipe[j].index > 0 )
+								client_record[i].numpipe[j].index--;
+						}
+					}
+            	}
 			}
 			else if(results[0] == "tell"){
 				tell(cli,results);	
-				for(int i = 0;i < record_n.size();++i){
-					if(record_n[i].index > 0 )
-						record_n[i].index--;
-				}
+				for(int i = 0;i < client_record.size();++i){
+                    if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
+                        for(int j = 0;j < client_record[i].numpipe.size();++j){
+							if(client_record[i].numpipe[j].index > 0 )
+								client_record[i].numpipe[j].index--;
+						}
+					}
+            	}
 			}
 			else if(results[0] == "yell"){
 				yell(cli,results);	
-				for(int i = 0;i < record_n.size();++i){
-					if(record_n[i].index > 0 )
-						record_n[i].index--;
-				}
+				for(int i = 0;i < client_record.size();++i){
+                    if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
+                        for(int j = 0;j < client_record[i].numpipe.size();++j){
+							if(client_record[i].numpipe[j].index > 0 )
+								client_record[i].numpipe[j].index--;
+						}
+					}
+            	}
 			}
 			else if(results[0] == "name"){
 				name(cli,results);	
-				for(int i = 0;i < record_n.size();++i){
-					if(record_n[i].index > 0 )
-						record_n[i].index--;
-				}
+				for(int i = 0;i < client_record.size();++i){
+                    if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
+                        for(int j = 0;j < client_record[i].numpipe.size();++j){
+							if(client_record[i].numpipe[j].index > 0 )
+								client_record[i].numpipe[j].index--;
+						}
+					}
+            	}
 			}
 			else {
-				operation(cmds);	
-				for(int i = 0;i < record_n.size();++i){
-					if(record_n[i].index > 0 )
-						record_n[i].index--;
-				}
-
+				operation(cmds,cli);	
+				for(int i = 0;i < client_record.size();++i){
+                    if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
+                        for(int j = 0;j < client_record[i].numpipe.size();++j){
+							if(client_record[i].numpipe[j].index > 0 )
+								client_record[i].numpipe[j].index--;
+						}
+					}
+            	}
 			}
 		}
 		cout << "% ";

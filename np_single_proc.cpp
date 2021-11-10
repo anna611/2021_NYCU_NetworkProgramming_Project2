@@ -79,7 +79,9 @@ int main(int argc, char* argv[]){
                 strncpy(new_cli.ip, inet_ntoa(fsin.sin_addr), INET_ADDRSTRLEN);
                 new_cli.port = ntohs(fsin.sin_port);    
                 new_cli.finish = 0;
-               // new_cli.numpipe.clear(); 
+                new_cli.env = "PATH";
+                new_cli.env_v = "bin:.";
+                new_cli.numpipe.clear(); 
                 client_record.push_back(new_cli);
                 FD_SET(ssock,&afds);
                 welcome(new_cli.fd);
@@ -107,7 +109,7 @@ int main(int argc, char* argv[]){
                     client_info cur_client;
                     int status = 0;
                     for(int i = 0;i < client_record.size();++i){
-                        if(fd == client_record[i].fd)
+                        if(fd == client_record[i].fd && client_record[i].finish == 0)
                             cur_client = client_record[i];
                     }
                     if((pos = cli_msg.find(token)) != string::npos)
