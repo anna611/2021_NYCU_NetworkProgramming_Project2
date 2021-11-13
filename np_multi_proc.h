@@ -16,6 +16,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <stdio.h>
+#include <string.h>
 
 using namespace std;
 
@@ -120,11 +122,11 @@ class NpShell{
         void redirection(string&);
         vector<string> parse(string&);
         int operation(vector<string>);
-        int exec();
+        int exec(int);
         void who();
-		void tell(int,string);
-		void yell();
-		void name();
+		void tell(int,int,string);
+		void yell(int,string);
+		void name(int,string);
 };
 void NpShell::who(){
     printf("<ID>\t<nickname>\t<IP:port>\t<indicate me>\n");
@@ -144,86 +146,87 @@ void NpShell::who(){
 	munmap(c, sizeof(client_info) * MAX_CLIENT_SIZE);
     return;
 }
-void NpShell::tell(int id,string msg){
-    /*int id = stoi(s[1]);
-	string msg = "";
-	for(int i = 0;i < client_record.size();++i){
-		if(client_record[i].id == id && client_record[i].finish == 0){
-			msg = "*** " + cli.name+" told you ***: ";
-			for(int i = 2;i < s.size();++i){
-				msg += s[i];
-				if(i != s.size()-1)
-					msg += " ";
-			}
-			msg += "\n";
-			if(write(client_record[i].fd,msg.c_str(),msg.length()) == -1)
-				perror("send error");
-			return;
-		}
-	}
-	msg = "*** Error: user #"+ s[1] +" does not exist yet. ***\n";
-		if(write(cli.fd,msg.c_str(),msg.length()) == -1)
-			perror("send error");
-    */
-    return;
-}
-void NpShell::yell(){
-    /*string msg = "";
-	msg = "*** "+ cli.name + " yelled ***: ";
-	int nfds = getdtablesize();
-	for(int i = 1;i < s.size();++i){
-		msg += s[i];
-		if(i != s.size()-1)
-			msg += " ";
-	}
-	msg += "\n";
-	for(int fd = 0;fd < nfds; ++fd){
-		if(fd != msock && FD_ISSET(fd,&afds)){
-			if(write(fd,msg.c_str(),msg.length()) == -1)
-				perror("send error");
-		}
-	}
-    */
-    return;
-}
-void NpShell::name(){
-	/*int index;
-	string name = "";
-	for(int i = 1;i < s.size();++i){
-		name += s[i];
-		if(i != s.size()-1)
-			name += " ";
-	}
-	string msg = "";
-	int nfds = getdtablesize();
-	//check name exist or not
-	for(int i = 0;i < client_record.size();++i){
-		if(client_record[i].name == name && client_record[i].finish == 0){
-			index = -1;
-			break;
-		}
-		else{
-			if(client_record[i].id == cli.id && client_record[i].finish == 0){
-				index = i;
-			}
-		}
-	}
-	if(index != -1){
-		client_record[index].name = name;
-		msg = "*** User from " + string(cli.ip)+":"+to_string(cli.port) + " is named '"+ name +"'. ***\n";
-		for(int fd = 0;fd < nfds; ++fd){
-			if(fd != msock && FD_ISSET(fd,&afds)){
-				if(write(fd,msg.c_str(),msg.length()) == -1)
-					perror("send error");
-			}
-		}
+void NpShell::tell(int id,int target,string msg){
+	char buf[BUFSIZE];
+	memset( buf, 0, sizeof(char)*BUFSIZE );
+	client_info *c =  (client_info *)mmap(NULL, sizeof(client_info) * MAX_CLIENT_SIZE, PROT_READ, MAP_SHARED, info_fd, 0);
+	//check whether target exist
+	if(c[target-1].valid){
+		sprintf(buf,"*** %s told you ***: %s",c[id-1].name,msg.c_str());
+		kill(c[target-1].cpid,SIGUSR1);
 	}
 	else{
-		msg = "*** User '"+ s[1] +"' already exists. ***\n";
-		if(write(cli.fd,msg.c_str(),msg.length()) == -1)
-			perror("send error");
+		sprintf(buf,"*** Error: user #%s does not exist yet. ***",msg.c_str());
+		string tmp(buf);
+		cout << tmp << endl;
+		return;
 	}
-	*/
+	char *p = static_cast<char*>(mmap(NULL, 0x400000, PROT_READ | PROT_WRITE, MAP_SHARED, broadcast_fd, 0));
+	string tmp(buf);
+	/* end of string */
+	tmp += '\0';
+	strncpy(p, tmp.c_str(),tmp.length());
+	munmap(p, 0x400000);
+	usleep(50);
+	munmap(c, sizeof(client_info) * MAX_CLIENT_SIZE);
+	return;
+}
+void NpShell::yell(int id,string s){
+	char buf[BUFSIZE];
+	memset( buf, 0, sizeof(char)*BUFSIZE );
+	client_info *c =  (client_info *)mmap(NULL, sizeof(client_info) * MAX_CLIENT_SIZE, PROT_READ, MAP_SHARED, info_fd, 0);
+	s += '\0';
+	sprintf(buf,"*** %s yelled ***: %s",c[id-1].name,s.c_str());
+	//broadcast
+    char *p = static_cast<char*>(mmap(NULL, 0x400000, PROT_READ | PROT_WRITE, MAP_SHARED, broadcast_fd, 0));
+	string tmp(buf);
+	/* end of string */
+	tmp += '\0';
+	strncpy(p, tmp.c_str(),tmp.length());
+	munmap(p, 0x400000);
+	usleep(50);
+    for(int i = 0;i < MAX_CLIENT_SIZE;++i){
+		/* check id valid and send signo*/
+		if(c[i].valid == 1){
+			kill(c[i].cpid,SIGUSR1);
+		}
+	}
+	munmap(c, sizeof(client_info) * MAX_CLIENT_SIZE);
+    return;
+}
+void NpShell::name(int id,string s){
+	char buf[BUFSIZE];
+	memset( buf, 0, sizeof(char)*BUFSIZE );
+	client_info *c =  (client_info *)mmap(NULL, sizeof(client_info) * MAX_CLIENT_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, info_fd, 0);
+	for(int i = 0;i < MAX_CLIENT_SIZE;++i){
+		if(c[i].valid == 1 && c[i].name == s){
+			if(c[i].cpid != getpid()){
+				sprintf(buf,"*** User '%s' already exists. ***",s.c_str());
+				string tmp(buf);
+				cout << tmp << endl;
+				munmap(c, sizeof(client_info) * MAX_CLIENT_SIZE);
+				return;
+			}
+		}
+	}
+	s += '\0';
+	strncpy(c[id-1].name,s.c_str(),s.length());
+	sprintf(buf,"*** User from %s is named '%s'. ***",c[id-1].ip,s.c_str());
+	//broadcast
+    char *p = static_cast<char*>(mmap(NULL, 0x400000, PROT_READ | PROT_WRITE, MAP_SHARED, broadcast_fd, 0));
+	string tmp(buf);
+	/* end of string */
+	tmp += '\0';
+	strncpy(p, tmp.c_str(),tmp.length());
+	munmap(p, 0x400000);
+	usleep(50);
+    for(int i = 0;i < MAX_CLIENT_SIZE;++i){
+		/* check id valid and send signal*/
+		if(c[i].valid == 1){
+			kill(c[i].cpid,SIGUSR1);
+		}
+	}
+	munmap(c, sizeof(client_info) * MAX_CLIENT_SIZE);
     return;
 }
 void NpShell::handle_child(int signo) {
@@ -403,7 +406,7 @@ int NpShell::operation(vector<string> s){
 	}
 	return 0;	
 }
-int NpShell::exec(){
+int NpShell::exec(int id){
 	string str;	
 	cout << "% ";
 	setenv("PATH","bin:.",1);
@@ -437,21 +440,35 @@ int NpShell::exec(){
 				}
             }
             else if(results[0] == "tell"){
-				tell();
+				int target = stoi(results[1]);
+				string msg = "";
+				for(int i = 2;i < results.size();++i){
+					msg += results[i];
+					if(i != results.size()-1)
+						msg += " ";
+				}
+				tell(id,target,msg);
                 for(int i = 0;i < record_n.size();++i){
 					if(record_n[i].index > 0 )
 						record_n[i].index--;
 				}
             }
             else if(results[0] == "yell"){
-				yell();
+				string msg = "";
+				for(int i = 1;i < results.size();++i){
+					msg += results[i];
+					if(i != results.size()-1)
+						msg += " ";
+				}
+				yell(id,msg);
                 for(int i = 0;i < record_n.size();++i){
 					if(record_n[i].index > 0 )
 						record_n[i].index--;
 				}
             }
             else if(results[0] == "name"){
-				name();
+				string s = results[1];
+				name(id,s);
                 for(int i = 0;i < record_n.size();++i){
 					if(record_n[i].index > 0 )
 						record_n[i].index--;

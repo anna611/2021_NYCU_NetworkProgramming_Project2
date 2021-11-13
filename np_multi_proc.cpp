@@ -115,7 +115,7 @@ int main(int argc, char* argv[])
             welcome(newsockfd);
             login(cli_id);
             NpShell shell;
-            if(shell.exec() == -1){
+            if(shell.exec(cli_id) == -1){
                 close(STDIN_FILENO);
                 close(STDOUT_FILENO);
                 close(STDERR_FILENO);
