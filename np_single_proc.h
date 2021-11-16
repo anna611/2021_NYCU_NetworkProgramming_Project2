@@ -454,7 +454,7 @@ int NpShell::operation(vector<string> s,client_info cli){
 						j--;
 					}
 			}
-			if(i == s.size()-1 && !(x || y)){
+			if(i == s.size()-1 && !(x || y) && !user_pipe){
 				waitpid(c_pid,nullptr,0);
 			}
 		} else if(c_pid == 0){	//child process

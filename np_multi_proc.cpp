@@ -47,7 +47,21 @@ void client_info_shared_memory(){
 	munmap(c, sizeof(client_info) * MAX_CLIENT_SIZE);
     return;
 }
-
+void userpipe_shared_memory(){	
+	userpipe_fd = shm_open("store_userpipe", O_CREAT | O_RDWR, 0666);
+	ftruncate(userpipe_fd, sizeof(fifo_info));
+	fifo_info *f =  (fifo_info *)mmap(NULL, sizeof(fifo_info), PROT_READ | PROT_WRITE, MAP_SHARED, userpipe_fd, 0);
+	for(int i = 0;i < MAX_CLIENT_SIZE;++i){
+        for(int j = 0;j < MAX_CLIENT_SIZE;++j){
+            f->fifo_record[i][j].is_used = false;
+            f->fifo_record[i][j].fd[0] = -1;
+            f->fifo_record[i][j].fd[1] = -1;
+            memset(&f->fifo_record[i][j].curr_fifo,0,sizeof(f->fifo_record[i][j].curr_fifo));
+        }
+	}
+	munmap(f, sizeof(fifo_info));
+    return;
+}
 void broadcast_shared_memory(){
     broadcast_fd = shm_open("store_broadcast", O_CREAT | O_RDWR, 0666);
 	ftruncate(broadcast_fd, 0x400000);
@@ -58,6 +72,7 @@ int main(int argc, char* argv[])
 {
     client_info_shared_memory();
     broadcast_shared_memory();
+    userpipe_shared_memory();
     // server variable
     int sockfd, newsockfd, childpid;
     socklen_t clilen;
@@ -109,9 +124,12 @@ int main(int argc, char* argv[])
 			cf[cli_id-1].cpid = getpid();
 			cf[cli_id-1].valid = 1;
 			munmap(p, sizeof(client_info) * MAX_CLIENT_SIZE);
-            /* Set signals for boradcast msg */
+            /* Set signals for clients */
 			signal(SIGUSR1, SignalHandler);
-            /*Send welcome message*/
+            signal(SIGUSR2, SignalHandler);
+            signal(SIGINT, SignalHandler);
+            signal(SIGQUIT, SignalHandler);
+            signal(SIGTERM, SignalHandler);
             welcome(newsockfd);
             login(cli_id);
             NpShell shell;
@@ -128,6 +146,10 @@ int main(int argc, char* argv[])
         }
         else
         {
+            signal (SIGCHLD, handler_server);
+			signal (SIGINT, handler_server);
+			signal (SIGQUIT, handler_server);
+			signal (SIGTERM, handler_server);
             close(newsockfd);
         }
     }
