@@ -32,16 +32,16 @@ typedef struct{
 }pipe_data;
 
 typedef struct{
-    int cpid;
-    int id;
-    char name[20];
-    char ip[INET6_ADDRSTRLEN];
+	int cpid;
+	int id;
+	char name[20];
+	char ip[INET6_ADDRSTRLEN];
 	int valid;
 }client_info;
 
 typedef struct{
-    int fd[2];
-    bool is_used;
+	int fd[2];
+	bool is_used;
 	char curr_fifo[PATHMAX];
 }userpipe_info;
 
@@ -56,7 +56,7 @@ int currentid;
 vector<client_info> client_record;
 
 int getMinID(){
-    client_info *c =  (client_info *)mmap(NULL, sizeof(client_info) * MAX_CLIENT_SIZE, PROT_READ, MAP_SHARED, info_fd, 0);
+	client_info *c =  (client_info *)mmap(NULL, sizeof(client_info) * MAX_CLIENT_SIZE, PROT_READ, MAP_SHARED, info_fd, 0);
 	for(int i = 0;i < MAX_CLIENT_SIZE;++i){
 		if(!c[i].valid){
 			munmap(c, sizeof(client_info) * MAX_CLIENT_SIZE);
@@ -67,39 +67,37 @@ int getMinID(){
 	return -1;
 }
 void welcome(int sockfd){
-    string msg = "";
-    msg += "****************************************\n";
-    msg += "** Welcome to the information server. **\n";
-    msg += "****************************************";
-    cout << msg <<endl;
-    return;
+	string msg = "";
+	msg += "****************************************\n";
+	msg += "** Welcome to the information server. **\n";
+	msg += "****************************************";
+	cout << msg <<endl;
+	return;
 }
 void handler_server(int signo)
 {
 	if (signo == SIGCHLD)
-    {
+	{
 		while(waitpid (-1, NULL, WNOHANG) > 0);
 	}
-    else if(signo == SIGINT || signo == SIGQUIT || signo == SIGTERM)
-    {
+	else if(signo == SIGINT || signo == SIGQUIT || signo == SIGTERM)
+	{
 		exit (0);
 	}
 	signal (signo, handler_server);
 }
 void login(int id){
-    char buf[BUFSIZE];
+	char buf[BUFSIZE];
 	memset( buf, 0, sizeof(char)*BUFSIZE );
 	client_info *c =  (client_info *)mmap(NULL, sizeof(client_info) * MAX_CLIENT_SIZE, PROT_READ, MAP_SHARED, info_fd, 0);
 	sprintf(buf,"*** User '(no name)' entered from %s. ***",c[id-1].ip);
 	//broadcast
-    char *p = static_cast<char*>(mmap(NULL, 0x400000, PROT_READ | PROT_WRITE, MAP_SHARED, broadcast_fd, 0));
+	char *p = static_cast<char*>(mmap(NULL, 0x400000, PROT_READ | PROT_WRITE, MAP_SHARED, broadcast_fd, 0));
 	string tmp(buf);
-	/* end of string */
 	tmp += '\0';
 	strncpy(p, tmp.c_str(),tmp.length());
 	munmap(p, 0x400000);
 	for(int i = 0;i < MAX_CLIENT_SIZE;++i){
-		/* check id valid and send signo*/
 		if(c[i].valid == 1){
 			kill(c[i].cpid,SIGUSR1);
 		}
@@ -108,27 +106,25 @@ void login(int id){
 	return;
 }
 void logout(int id){
-    char buf[BUFSIZE];
+	char buf[BUFSIZE];
 	char send_fifo[PATHMAX];
 	char recv_fifo[PATHMAX];	
 	memset( buf, 0, sizeof(char)*BUFSIZE );
 	client_info *c =  (client_info *)mmap(NULL, sizeof(client_info) * MAX_CLIENT_SIZE, PROT_READ, MAP_SHARED, info_fd, 0);
 	sprintf(buf,"*** User '%s' left. ***",c[id-1].name);
 	//broadcast
-    char *p = static_cast<char*>(mmap(NULL, 0x400000, PROT_READ | PROT_WRITE, MAP_SHARED, broadcast_fd, 0));
+	char *p = static_cast<char*>(mmap(NULL, 0x400000, PROT_READ | PROT_WRITE, MAP_SHARED, broadcast_fd, 0));
 	string tmp(buf);
-	/* end of string */
 	tmp += '\0';
 	strncpy(p, tmp.c_str(),tmp.length());
 	munmap(p, 0x400000);
-    for(int i = 0;i < MAX_CLIENT_SIZE;++i){
-		/* check id valid and send signo*/
+	for(int i = 0;i < MAX_CLIENT_SIZE;++i){
 		if(c[i].valid == 1){
 			kill(c[i].cpid,SIGUSR1);
 		}
 	}
 	munmap(c, sizeof(client_info) * MAX_CLIENT_SIZE);
-    //clear userpipe when logout
+	//clear userpipe when logout
 	fifo_info* f =  (fifo_info *)mmap(NULL, sizeof(fifo_info) , PROT_READ | PROT_WRITE, MAP_SHARED, userpipe_fd, 0);
 	for(int i = 0;i < MAX_CLIENT_SIZE;++i){
 		if(f->fifo_record[id-1][i].fd[0] != -1){
@@ -166,9 +162,9 @@ void logout(int id){
 	return;
 }
 static void SignalHandler(int signo){
-     //receive msg from broadcast 
+	//receive msg from broadcast 
 	if (signo == SIGUSR1)
-    {
+	{
 		char *p = static_cast<char*>(mmap(NULL, 0x400000, PROT_READ, MAP_SHARED, broadcast_fd, 0));
 		string tmp(p);
 		cout << tmp << endl;
@@ -200,29 +196,29 @@ static void SignalHandler(int signo){
 		munmap(f,  sizeof(fifo_info));
 	}
 	else if(signo == SIGINT || signo == SIGQUIT || signo == SIGTERM)
-    {
+	{
 		exit (0);
 	}
 	signal(signo,SignalHandler);
 }
 class NpShell{
-    private:
-        vector<pipe_data> record_n;
-    public:
-        static void handle_child(int);
-        vector<string> spilt_input(const string&);
-        int printenv(string&);
-        void redirection(string&);
-        vector<string> parse(string&);
-        int operation(vector<string>,int);
-        int exec(int);
-        void who();
+	private:
+		vector<pipe_data> record_n;
+	public:
+		static void handle_child(int);
+		vector<string> spilt_input(const string&);
+		int printenv(string&);
+		void redirection(string&);
+		vector<string> parse(string&);
+		int operation(vector<string>,int);
+		int exec(int);
+		void who();
 		void tell(int,int,string);
 		void yell(int,string);
 		void name(int,string);
 };
 void NpShell::who(){
-    printf("<ID>\t<nickname>\t<IP:port>\t<indicate me>\n");
+	printf("<ID>\t<nickname>\t<IP:port>\t<indicate me>\n");
 	client_info *c =  (client_info *)mmap(NULL, sizeof(client_info) * MAX_CLIENT_SIZE, PROT_READ, MAP_SHARED, info_fd, 0);
 	for(int i = 0;i < MAX_CLIENT_SIZE;i++){
 		if(c[i].valid == 1){
@@ -237,7 +233,7 @@ void NpShell::who(){
 	}
 	fflush(stdout);
 	munmap(c, sizeof(client_info) * MAX_CLIENT_SIZE);
-    return;
+	return;
 }
 void NpShell::tell(int id,int target,string msg){
 	char buf[BUFSIZE];
@@ -270,19 +266,19 @@ void NpShell::yell(int id,string s){
 	s += '\0';
 	sprintf(buf,"*** %s yelled ***: %s",c[id-1].name,s.c_str());
 	//broadcast
-    char *p = static_cast<char*>(mmap(NULL, 0x400000, PROT_READ | PROT_WRITE, MAP_SHARED, broadcast_fd, 0));
+	char *p = static_cast<char*>(mmap(NULL, 0x400000, PROT_READ | PROT_WRITE, MAP_SHARED, broadcast_fd, 0));
 	string tmp(buf);
 	tmp += '\0';
 	strncpy(p, tmp.c_str(),tmp.length());
 	munmap(p, 0x400000);
 	usleep(50);
-    for(int i = 0;i < MAX_CLIENT_SIZE;++i){
+	for(int i = 0;i < MAX_CLIENT_SIZE;++i){
 		if(c[i].valid == 1){
 			kill(c[i].cpid,SIGUSR1);
 		}
 	}
 	munmap(c, sizeof(client_info) * MAX_CLIENT_SIZE);
-    return;
+	return;
 }
 void NpShell::name(int id,string s){
 	char buf[BUFSIZE];
@@ -303,24 +299,24 @@ void NpShell::name(int id,string s){
 	strncpy(c[id-1].name,s.c_str(),s.length());
 	sprintf(buf,"*** User from %s is named '%s'. ***",c[id-1].ip,s.c_str());
 	//broadcast
-    char *p = static_cast<char*>(mmap(NULL, 0x400000, PROT_READ | PROT_WRITE, MAP_SHARED, broadcast_fd, 0));
+	char *p = static_cast<char*>(mmap(NULL, 0x400000, PROT_READ | PROT_WRITE, MAP_SHARED, broadcast_fd, 0));
 	string tmp(buf);
 	tmp += '\0';
 	strncpy(p, tmp.c_str(),tmp.length());
 	munmap(p, 0x400000);
 	usleep(50);
-    for(int i = 0;i < MAX_CLIENT_SIZE;++i){
+	for(int i = 0;i < MAX_CLIENT_SIZE;++i){
 		if(c[i].valid == 1){
 			kill(c[i].cpid,SIGUSR1);
 		}
 	}
 	munmap(c, sizeof(client_info) * MAX_CLIENT_SIZE);
-    return;
+	return;
 }
 void NpShell::handle_child(int signo) {
 	int status;
-    while (waitpid(-1, &status, WNOHANG) > 0) {
-    };
+	while (waitpid(-1, &status, WNOHANG) > 0) {
+	};
 }
 vector<string> NpShell::spilt_input(const string& s){	//spilt commands with space
 	istringstream stream(s);
@@ -432,7 +428,7 @@ int NpShell::operation(vector<string> s,int id){
 			cmd += tmp_cmd[j];
 			if(j!= tmp_cmd.size()-1)
 				cmd += " ";
-				//check userpipe send  
+			//check userpipe send  
 			if(((pos = tmp_cmd[j].find(deli3)) != string::npos) && tmp_cmd[j].length()>1){
 				dest = stoi(tmp_cmd[j].substr(pos+1));
 				tmp_cmd.erase(tmp_cmd.begin()+j);
@@ -553,11 +549,11 @@ int NpShell::operation(vector<string> s,int id){
 		}
 		if(i == 0){
 			for(int j = 0;j<record_n.size();++j){
-					if(record_n[j].index == 0){
-						num.push_back(j);
-						record_n[j].index = -1;
-					}
+				if(record_n[j].index == 0){
+					num.push_back(j);
+					record_n[j].index = -1;
 				}
+			}
 		}
 		signal(SIGCHLD,handle_child);
 		pid_t c_pid = fork();
@@ -581,12 +577,12 @@ int NpShell::operation(vector<string> s,int id){
 				num.erase(num.begin(),num.end());
 			}
 			for(int j = 0;j<record_n.size();++j){
-					if(record_n[j].index == -1){
-						close(record_n[j].fd[0]);
-						close(record_n[j].fd[1]);
-						record_n.erase(record_n.begin()+j);
-					}
+				if(record_n[j].index == -1){
+					close(record_n[j].fd[0]);
+					close(record_n[j].fd[1]);
+					record_n.erase(record_n.begin()+j);
 				}
+			}
 			munmap(f,  sizeof(fifo_info));
 			if(i == s.size()-1 && !(x || y) && !user_pipe){
 				waitpid(c_pid,&status,0);	
@@ -648,7 +644,7 @@ int NpShell::operation(vector<string> s,int id){
 			//userpipe recv
 			if(user_pipe_recv == 1){
 				fifo_info* f =  (fifo_info *)mmap(NULL, sizeof(fifo_info) , PROT_READ | PROT_WRITE, MAP_SHARED, userpipe_fd, 0);
-				usleep(50);
+				usleep(30);
 				dup2(f->fifo_record[source-1][id-1].fd[0],STDIN_FILENO);
 				close(f->fifo_record[source-1][id-1].fd[0]);
 				client_info *c =  (client_info *)mmap(NULL, sizeof(client_info) * MAX_CLIENT_SIZE, PROT_READ, MAP_SHARED, info_fd, 0);
@@ -721,14 +717,14 @@ int NpShell::exec(int id){
 			else if(results[0] == "exit" || results[0] == "EOF" ){
 				return -1;	
 			}
-            else if(results[0] == "who"){
+			else if(results[0] == "who"){
 				who();
-                for(int i = 0;i < record_n.size();++i){
+				for(int i = 0;i < record_n.size();++i){
 					if(record_n[i].index > 0 )
 						record_n[i].index--;
 				}
-            }
-            else if(results[0] == "tell"){
+			}
+			else if(results[0] == "tell"){
 				int target = stoi(results[1]);
 				string msg = "";
 				for(int i = 2;i < results.size();++i){
@@ -737,12 +733,12 @@ int NpShell::exec(int id){
 						msg += " ";
 				}
 				tell(id,target,msg);
-                for(int i = 0;i < record_n.size();++i){
+				for(int i = 0;i < record_n.size();++i){
 					if(record_n[i].index > 0 )
 						record_n[i].index--;
 				}
-            }
-            else if(results[0] == "yell"){
+			}
+			else if(results[0] == "yell"){
 				string msg = "";
 				for(int i = 1;i < results.size();++i){
 					msg += results[i];
@@ -750,19 +746,19 @@ int NpShell::exec(int id){
 						msg += " ";
 				}
 				yell(id,msg);
-                for(int i = 0;i < record_n.size();++i){
+				for(int i = 0;i < record_n.size();++i){
 					if(record_n[i].index > 0 )
 						record_n[i].index--;
 				}
-            }
-            else if(results[0] == "name"){
+			}
+			else if(results[0] == "name"){
 				string s = results[1];
 				name(id,s);
-                for(int i = 0;i < record_n.size();++i){
+				for(int i = 0;i < record_n.size();++i){
 					if(record_n[i].index > 0 )
 						record_n[i].index--;
 				}
-            }
+			}
 			else {
 				operation(cmds,id);	
 				for(int i = 0;i < record_n.size();++i){

@@ -29,11 +29,11 @@ typedef struct{
 }pipe_data;
 
 typedef struct{
-    int fd;
-    int id;
-    string name;
-    char ip[INET_ADDRSTRLEN];
-    int port;
+	int fd;
+	int id;
+	string name;
+	char ip[INET_ADDRSTRLEN];
+	int port;
 	int finish;
 	string env;
 	string env_v;
@@ -54,30 +54,30 @@ int record_id[MAX_CLIENT_SIZE];
 vector<userpipe> userpipe_record;
 vector<client_info> client_record;
 class NpShell{
-    private:
+	private:
 		int sockfd;
-    public:
-        static void handle_child(int);
-        vector<string> spilt_input(const string&);
-        int printenv(string&);
-        void redirection(string&);
-        vector<string> parse(string&);
-        int operation(vector<string>,client_info);
-        int exec(string,client_info);
-        void who(client_info);
+	public:
+		static void handle_child(int);
+		vector<string> spilt_input(const string&);
+		int printenv(string&);
+		void redirection(string&);
+		vector<string> parse(string&);
+		int operation(vector<string>,client_info);
+		int exec(string,client_info);
+		void who(client_info);
 		void tell(client_info,vector<string>);
 		void yell(client_info,vector<string>);
 		void name(client_info,vector<string>);
-      //  int GetUnusedID();
+		//  int GetUnusedID();
 
 };
 void welcome(int sockfd){
-    string msg = "";
-    msg += "****************************************\n";
-    msg += "** Welcome to the information server. **\n";
-    msg += "****************************************\n";
-    if(write(sockfd,msg.c_str(),msg.length()) == -1)
-        perror("send error");
+	string msg = "";
+	msg += "****************************************\n";
+	msg += "** Welcome to the information server. **\n";
+	msg += "****************************************\n";
+	if(write(sockfd,msg.c_str(),msg.length()) == -1)
+		perror("send error");
 }
 void login(client_info &cli){
 	int nfds = getdtablesize();
@@ -106,7 +106,7 @@ void logout(client_info &cli){
 	}
 }
 void NpShell::who(client_info cli){
-    cout << "<ID>\t" << "<nickname>\t" << "<IP:port>\t"<<"<indicate me>"<< endl;
+	cout << "<ID>\t" << "<nickname>\t" << "<IP:port>\t"<<"<indicate me>"<< endl;
 	for(int i = 0;i < MAX_CLIENT_SIZE;++i){
 		if(record_id[i] == 1 ){
 			for(int j =0;j < client_record.size();++j){
@@ -121,10 +121,10 @@ void NpShell::who(client_info cli){
 			}
 		}
 	}
-    return;
+	return;
 }
 void NpShell::tell(client_info cli,vector<string> s){
-    int id = stoi(s[1]);
+	int id = stoi(s[1]);
 	string msg = "";
 	for(int i = 0;i < client_record.size();++i){
 		if(client_record[i].id == id && client_record[i].finish == 0){
@@ -141,12 +141,12 @@ void NpShell::tell(client_info cli,vector<string> s){
 		}
 	}
 	msg = "*** Error: user #"+ s[1] +" does not exist yet. ***\n";
-		if(write(cli.fd,msg.c_str(),msg.length()) == -1)
-			perror("send error");
-    return;
+	if(write(cli.fd,msg.c_str(),msg.length()) == -1)
+		perror("send error");
+	return;
 }
 void NpShell::yell(client_info cli,vector<string> s){
-    string msg = "";
+	string msg = "";
 	msg = "*** "+ cli.name + " yelled ***: ";
 	int nfds = getdtablesize();
 	for(int i = 1;i < s.size();++i){
@@ -161,7 +161,7 @@ void NpShell::yell(client_info cli,vector<string> s){
 				perror("send error");
 		}
 	}
-    return;
+	return;
 }
 void NpShell::name(client_info cli,vector<string> s){
 	int index;
@@ -200,8 +200,8 @@ void NpShell::name(client_info cli,vector<string> s){
 		if(write(cli.fd,msg.c_str(),msg.length()) == -1)
 			perror("send error");
 	}
-	
-    return;
+
+	return;
 }
 void NpShell::handle_child(int signo) {
 	/* Declare function as [static] to purge the hidden [this] pointer
@@ -312,100 +312,100 @@ int NpShell::operation(vector<string> s,client_info cli){
 		if(i != s.size()-1){
 			cmd += " | ";
 		}
-			//source id exist
-			if(source != -1){
-				if(record_id[source-1] == 0){
+		//source id exist
+		if(source != -1){
+			if(record_id[source-1] == 0 || source > 30){
+				userpipe_error = true;
+				msg = "*** Error: user #"+to_string(source)+" does not exist yet. ***\n";
+				if(write(cli.fd,msg.c_str(),msg.length()) == -1)
+					perror("send error");
+			}
+			else{
+				for(int j = 0;j < userpipe_record.size();++j){
+					if(userpipe_record[j].source_id == source && userpipe_record[j].dest_id == cli.id){
+						if(userpipe_record[j].is_used == true){
+							exist_r = true;
+							userpipe_record[j].is_used = false;
+						}
+					}
+				}
+				//check whether exist
+				if(exist_r){
+					string source_name = "";
+					user_pipe_recv = 1;
+					for(int j = 0; j < client_record.size();++j){
+						if(client_record[j].id == source && client_record[j].finish == 0)
+							source_name = client_record[j].name;
+					}
+					if(i == s.size()-1){
+						msg = "*** "+cli.name+" (#"+to_string(cli.id)+") just received from "+source_name+" (#"+to_string(source)+") by '"+cmd+"' ***\n";
+						nfds = getdtablesize();
+						//broadcast
+						for(int fd = 0;fd < nfds; ++fd){
+							if(fd != msock && FD_ISSET(fd,&afds)){
+								if(write(fd,msg.c_str(),msg.length()) == -1)
+									perror("send error");
+							}
+						}
+					}
+				}
+				else{
 					userpipe_error = true;
-					msg = "*** Error: user #"+to_string(source)+" does not exist yet. ***\n";
+					msg += "*** Error: the pipe #"+to_string(source)+"->#"+to_string(cli.id)+" does not exist yet. ***\n";
 					if(write(cli.fd,msg.c_str(),msg.length()) == -1)
 						perror("send error");
 				}
-				else{
-					for(int j = 0;j < userpipe_record.size();++j){
-						if(userpipe_record[j].source_id == source && userpipe_record[j].dest_id == cli.id){
-							if(userpipe_record[j].is_used == true){
-								exist_r = true;
-								userpipe_record[j].is_used = false;
-							}
-						}
-					}
-					//check whether exist
-					if(exist_r){
-						string source_name = "";
-						user_pipe_recv = 1;
-						for(int j = 0; j < client_record.size();++j){
-							if(client_record[j].id == source && client_record[j].finish == 0)
-								source_name = client_record[j].name;
-						}
-						if(i == s.size()-1){
-							msg = "*** "+cli.name+" (#"+to_string(cli.id)+") just received from "+source_name+" (#"+to_string(source)+") by '"+cmd+"' ***\n";
-							nfds = getdtablesize();
-							//broadcast
-							for(int fd = 0;fd < nfds; ++fd){
-								if(fd != msock && FD_ISSET(fd,&afds)){
-									if(write(fd,msg.c_str(),msg.length()) == -1)
-										perror("send error");
-								}
-							}
-						}
-					}
-					else{
-						userpipe_error = true;
-						msg += "*** Error: the pipe #"+to_string(source)+"->#"+to_string(cli.id)+" does not exist yet. ***\n";
-						if(write(cli.fd,msg.c_str(),msg.length()) == -1)
-							perror("send error");
+			}
+		}
+		//dest id exist 
+		if(dest != -1){
+			if(record_id[dest-1] == 0 || dest > 30){
+				userpipe_error = true;
+				msg = "*** Error: user #"+to_string(dest)+" does not exist yet. ***\n";
+				if(write(cli.fd,msg.c_str(),msg.length()) == -1)
+					perror("send error");
+			}
+			else{
+				for(int j = 0;j < userpipe_record.size();++j){
+					if(userpipe_record[j].source_id == cli.id && userpipe_record[j].dest_id == dest){
+						if(userpipe_record[j].is_used == true)
+							exist = true;
 					}
 				}
-			}
-			//dest id exist 
-			if(dest != -1){
-				if(record_id[dest-1] == 0){
+				//check whether exist
+				if(!exist){
+					if(pipe(u.fd) < 0)
+						cout << "pipe create error"<<endl;
+					u.source_id = cli.id;
+					u.dest_id = dest;
+					u.is_used = true;
+					userpipe_record.push_back(u);
+					string dest_name = "";
+					user_pipe = 1;
+					for(int j = 0; j < client_record.size();++j){
+						if(client_record[j].id == dest && client_record[j].finish == 0)
+							dest_name = client_record[j].name;
+					}
+					if(i == s.size()-1){
+						msg = "*** "+cli.name+" (#"+to_string(cli.id)+") just piped '"+cmd+"' to "+dest_name+" (#"+to_string(dest)+") ***\n";
+						nfds = getdtablesize();
+						//broadcast
+						for(int fd = 0;fd < nfds; ++fd){
+							if(fd != msock && FD_ISSET(fd,&afds)){
+								if(write(fd,msg.c_str(),msg.length()) == -1)
+									perror("send error");
+							}
+						}
+					}
+				}
+				else{
 					userpipe_error = true;
-					msg = "*** Error: user #"+to_string(dest)+" does not exist yet. ***\n";
+					msg += "*** Error: the pipe #"+to_string(cli.id)+"->#"+to_string(dest)+" already exists. ***\n";
 					if(write(cli.fd,msg.c_str(),msg.length()) == -1)
 						perror("send error");
 				}
-				else{
-					for(int j = 0;j < userpipe_record.size();++j){
-						if(userpipe_record[j].source_id == cli.id && userpipe_record[j].dest_id == dest){
-							if(userpipe_record[j].is_used == true)
-								exist = true;
-						}
-					}
-					//check whether exist
-					if(!exist){
-						if(pipe(u.fd) < 0)
-							cout << "pipe create error"<<endl;
-						u.source_id = cli.id;
-						u.dest_id = dest;
-						u.is_used = true;
-						userpipe_record.push_back(u);
-						string dest_name = "";
-						user_pipe = 1;
-						for(int j = 0; j < client_record.size();++j){
-							if(client_record[j].id == dest && client_record[j].finish == 0)
-								dest_name = client_record[j].name;
-						}
-						if(i == s.size()-1){
-							msg = "*** "+cli.name+" (#"+to_string(cli.id)+") just piped '"+cmd+"' to "+dest_name+" (#"+to_string(dest)+") ***\n";
-							nfds = getdtablesize();
-							//broadcast
-							for(int fd = 0;fd < nfds; ++fd){
-								if(fd != msock && FD_ISSET(fd,&afds)){
-									if(write(fd,msg.c_str(),msg.length()) == -1)
-										perror("send error");
-								}
-							}
-						}
-					}
-					else{
-						userpipe_error = true;
-						msg += "*** Error: the pipe #"+to_string(cli.id)+"->#"+to_string(dest)+" already exists. ***\n";
-						if(write(cli.fd,msg.c_str(),msg.length()) == -1)
-							perror("send error");
-					}
-				}
 			}
+		}
 		if(i == 0){
 			for(int j = 0;j<cli.numpipe.size();++j){
 				if(cli.numpipe[j].index == 0){
@@ -435,24 +435,24 @@ int NpShell::operation(vector<string> s,client_info cli){
 				num.erase(num.begin(),num.end());
 			}
 			for(int j = 0;j<cli.numpipe.size();++j){
-					if(cli.numpipe[j].index == -1){
-						close(cli.numpipe[j].fd[0]);
-						close(cli.numpipe[j].fd[1]);
-						cli.numpipe.erase(cli.numpipe.begin()+j);
-						j--;
-					}
+				if(cli.numpipe[j].index == -1){
+					close(cli.numpipe[j].fd[0]);
+					close(cli.numpipe[j].fd[1]);
+					cli.numpipe.erase(cli.numpipe.begin()+j);
+					j--;
+				}
 			}
 			for(int j = 0;j < client_record.size();++j){
-                if(cli.fd == client_record[j].fd && client_record[j].finish == 0)
-                    client_record[j] = cli;
-            }
+				if(cli.fd == client_record[j].fd && client_record[j].finish == 0)
+					client_record[j] = cli;
+			}
 			for(int j = 0;j<userpipe_record.size();++j){
-					if(userpipe_record[j].is_used == false){
-						close(userpipe_record[j].fd[0]);
-						close(userpipe_record[j].fd[1]);
-						userpipe_record.erase(userpipe_record.begin()+j);
-						j--;
-					}
+				if(userpipe_record[j].is_used == false){
+					close(userpipe_record[j].fd[0]);
+					close(userpipe_record[j].fd[1]);
+					userpipe_record.erase(userpipe_record.begin()+j);
+					j--;
+				}
 			}
 			if(i == s.size()-1 && !(x || y) && !user_pipe){
 				waitpid(c_pid,nullptr,0);
@@ -521,9 +521,9 @@ int NpShell::operation(vector<string> s,client_info cli){
 				close(cli.numpipe[j].fd[1]);
 			}
 			for(int j = 0;j < client_record.size();++j){
-                if(cli.fd == client_record[j].fd && client_record[j].finish == 0)
-                    client_record[j] = cli;
-            }
+				if(cli.fd == client_record[j].fd && client_record[j].finish == 0)
+					client_record[j] = cli;
+			}
 			for(int j = 0;j < record.size(); ++j){
 				close(record[j].fd[0]);
 				close(record[j].fd[1]);
@@ -551,94 +551,94 @@ int NpShell::exec(string str,client_info cli){
 	setenv(cli.env.c_str(),cli.env_v.c_str(),1);
 	sockfd = cli.fd;
 	dup2(sockfd,STDOUT_FILENO);
-    dup2(sockfd,STDERR_FILENO);
-		vector<string> results = spilt_input(str);
-		vector<string> cmds = parse(str);
-		if(!results.empty()){
-			if(results[0] == "printenv"){
-				printenv(results[1]);
-				for(int i = 0;i < client_record.size();++i){
-                    if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
-                        for(int j = 0;j < client_record[i].numpipe.size();++j){
-							if(client_record[i].numpipe[j].index > 0 )
-								client_record[i].numpipe[j].index--;
-						}
+	dup2(sockfd,STDERR_FILENO);
+	vector<string> results = spilt_input(str);
+	vector<string> cmds = parse(str);
+	if(!results.empty()){
+		if(results[0] == "printenv"){
+			printenv(results[1]);
+			for(int i = 0;i < client_record.size();++i){
+				if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
+					for(int j = 0;j < client_record[i].numpipe.size();++j){
+						if(client_record[i].numpipe[j].index > 0 )
+							client_record[i].numpipe[j].index--;
 					}
-            	}
-			}
-			else if(results[0] == "setenv"){
-				setenv(results[1].c_str(),results[2].c_str(),1);	
-				for(int i = 0;i < client_record.size();++i){
-                    if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
-                        for(int j = 0;j < client_record[i].numpipe.size();++j){
-							if(client_record[i].numpipe[j].index > 0 )
-								client_record[i].numpipe[j].index--;
-						}
-						client_record[i].env = results[1];
-						client_record[i].env_v = results[2];
-					}
-            	}
-			}
-			else if(results[0] == "exit" || results[0] == "EOF" ){
-                return -1;
-			}
-			else if(results[0] == "who"){
-				who(cli);	
-				for(int i = 0;i < client_record.size();++i){
-                    if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
-                        for(int j = 0;j < client_record[i].numpipe.size();++j){
-							if(client_record[i].numpipe[j].index > 0 )
-								client_record[i].numpipe[j].index--;
-						}
-					}
-            	}
-			}
-			else if(results[0] == "tell"){
-				tell(cli,results);	
-				for(int i = 0;i < client_record.size();++i){
-                    if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
-                        for(int j = 0;j < client_record[i].numpipe.size();++j){
-							if(client_record[i].numpipe[j].index > 0 )
-								client_record[i].numpipe[j].index--;
-						}
-					}
-            	}
-			}
-			else if(results[0] == "yell"){
-				yell(cli,results);	
-				for(int i = 0;i < client_record.size();++i){
-                    if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
-                        for(int j = 0;j < client_record[i].numpipe.size();++j){
-							if(client_record[i].numpipe[j].index > 0 )
-								client_record[i].numpipe[j].index--;
-						}
-					}
-            	}
-			}
-			else if(results[0] == "name"){
-				name(cli,results);	
-				for(int i = 0;i < client_record.size();++i){
-                    if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
-                        for(int j = 0;j < client_record[i].numpipe.size();++j){
-							if(client_record[i].numpipe[j].index > 0 )
-								client_record[i].numpipe[j].index--;
-						}
-					}
-            	}
-			}
-			else {
-				operation(cmds,cli);	
-				for(int i = 0;i < client_record.size();++i){
-                    if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
-                        for(int j = 0;j < client_record[i].numpipe.size();++j){
-							if(client_record[i].numpipe[j].index > 0 )
-								client_record[i].numpipe[j].index--;
-						}
-					}
-            	}
+				}
 			}
 		}
-		cout << "% ";
-		fflush(stdout);		
+		else if(results[0] == "setenv"){
+			setenv(results[1].c_str(),results[2].c_str(),1);	
+			for(int i = 0;i < client_record.size();++i){
+				if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
+					for(int j = 0;j < client_record[i].numpipe.size();++j){
+						if(client_record[i].numpipe[j].index > 0 )
+							client_record[i].numpipe[j].index--;
+					}
+					client_record[i].env = results[1];
+					client_record[i].env_v = results[2];
+				}
+			}
+		}
+		else if(results[0] == "exit" || results[0] == "EOF" ){
+			return -1;
+		}
+		else if(results[0] == "who"){
+			who(cli);	
+			for(int i = 0;i < client_record.size();++i){
+				if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
+					for(int j = 0;j < client_record[i].numpipe.size();++j){
+						if(client_record[i].numpipe[j].index > 0 )
+							client_record[i].numpipe[j].index--;
+					}
+				}
+			}
+		}
+		else if(results[0] == "tell"){
+			tell(cli,results);	
+			for(int i = 0;i < client_record.size();++i){
+				if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
+					for(int j = 0;j < client_record[i].numpipe.size();++j){
+						if(client_record[i].numpipe[j].index > 0 )
+							client_record[i].numpipe[j].index--;
+					}
+				}
+			}
+		}
+		else if(results[0] == "yell"){
+			yell(cli,results);	
+			for(int i = 0;i < client_record.size();++i){
+				if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
+					for(int j = 0;j < client_record[i].numpipe.size();++j){
+						if(client_record[i].numpipe[j].index > 0 )
+							client_record[i].numpipe[j].index--;
+					}
+				}
+			}
+		}
+		else if(results[0] == "name"){
+			name(cli,results);	
+			for(int i = 0;i < client_record.size();++i){
+				if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
+					for(int j = 0;j < client_record[i].numpipe.size();++j){
+						if(client_record[i].numpipe[j].index > 0 )
+							client_record[i].numpipe[j].index--;
+					}
+				}
+			}
+		}
+		else {
+			operation(cmds,cli);	
+			for(int i = 0;i < client_record.size();++i){
+				if(cli.fd == client_record[i].fd && client_record[i].finish == 0){
+					for(int j = 0;j < client_record[i].numpipe.size();++j){
+						if(client_record[i].numpipe[j].index > 0 )
+							client_record[i].numpipe[j].index--;
+					}
+				}
+			}
+		}
+	}
+	cout << "% ";
+	fflush(stdout);		
 	return 0;
 }
